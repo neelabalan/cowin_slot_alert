@@ -9,6 +9,8 @@ import inquirer
 import requests
 import pandas as pd
 import playsound
+import platform
+import os
 
 DATE_FORMAT = '%d-%m-%Y'
 URL = 'https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByDistrict?district_id={district_id}&date={date}'
@@ -19,6 +21,12 @@ headers = {
     'Referer'        : 'https://apisetu.gov.in/public/api/cowin',
     'Origin'         : 'https://apisetu.gov.in',
 }
+
+def clear():
+    if platform.system() == 'Windows':
+        os.system('cls') 
+    else:
+        os.system('clear')
 
 def build_query(age, vaccine, date_range, dose):
     age_query = 'min_age_limit <= {}'.format(age)
@@ -48,9 +56,24 @@ def extract_preferences(preference):
     dose       = preference.get('dose')
     return age, vaccine, date_range, dose
 
-def get_preferred_info(centers, preference):
+def filter_query_response(response):
+    if not response.empty:
+        drop_list = ['min_age_limit', 'session_id', 'slots', 'available_capacity']
+        if (response['dose_I'] == 0).all():
+            drop_list.append('dose_I') 
+        if (response['dose_II'] == 0).all():
+            drop_list.append('dose_II')
+        
+
+        filtered_response = response.drop(drop_list, axis=1)
+        return filtered_response 
+    else:
+        # return emtpy data frame
+        return pd.DataFrame()
+
+
+def get_preferred_info(centers, query):
     preferred_info = list()
-    age, vaccine, date_range, dose = extract_preferences(preference)
 
     for center in centers:
         df = pd.DataFrame(center.get('sessions'))
@@ -61,18 +84,11 @@ def get_preferred_info(centers, preference):
             }, inplace=True
         )
 
-        query = build_query(age, vaccine, date_range, dose)
         query_response = df.query(query)
-
-        if not query_response.empty:
-            drop_list = ['min_age_limit', 'session_id', 'slots', 'available_capacity']
-            if dose:
-                drop_list.append('dose_II') if dose==1 else drop_list.append('dose_I')
-            
-
-            filtered_query_response = query_response.drop(drop_list, axis=1)
+        filtered_response = filter_query_response(query_response)
+        if not filtered_response.empty:
             preferred_info.append(
-                {', '.join([center['name'], center['address']]): filtered_query_response}
+                {', '.join([center['name'], center['address']]): filtered_response}
             )
             
     return preferred_info
@@ -84,13 +100,16 @@ def print_formatted_info(pref_info):
             for center, slots in info.items():
                 click.secho(center)
                 click.secho(
-                    slots.to_string(), fg='blue'
+                    slots.to_string(index=False), fg='blue'
                 )
                 print('\n\n')
 
 def ping(preference):
     # try and raise for status
     try:
+        age, vaccine, date_range, dose = extract_preferences(preference)
+        query = build_query(age, vaccine, date_range, dose)
+
         while True:
             resp = requests.get(
             URL.format(
@@ -104,14 +123,21 @@ def ping(preference):
             })
 
             if resp.status_code == 200:
-                pref_info = get_preferred_info(resp.json().get('centers'), preference)
+                pref_info = get_preferred_info(resp.json().get('centers'), query)
+                clear()
+                click.secho(
+                    'Last Updated: {}'.format(
+                        datetime.datetime.now().strftime('%c')
+                    ),
+                    fg='green'
+                )
                 print_formatted_info(pref_info)
 
 
             time.sleep(preference['interval'])
 
     except (KeyboardInterrupt, SystemExit):
-        print('exiting')
+        print('\nexiting')
  
 
 
