@@ -8,6 +8,7 @@ import sys
 import inquirer
 import requests
 import pandas as pd
+import playsound
 
 DATE_FORMAT = '%d-%m-%Y'
 URL = 'https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByDistrict?district_id={district_id}&date={date}'
@@ -19,35 +20,59 @@ headers = {
     'Origin'         : 'https://apisetu.gov.in',
 }
 
+def build_query(preference):
+    age_query = 'min_age_limit <= {}'.format(preference.get('age'))
+    vaccine_qeury = 'vaccine == {}'.format(preference.get('vaccine')) if \
+        not preference.get('vaccine') == 'ALL' else '' 
+    date_query = 'date in {}'.format(str(get_date_range(preference.get('date_range'))))
+    return ' and '.join(
+        filter(None, [age_query, vaccine_qeury, date_query])
+    )
+
+
+
+def get_date_range(date_range):
+    return [(datetime.date.today() + datetime.timedelta(i)).strftime(DATE_FORMAT) for i in range(date_range+1)]
+
 def get_preferred_info(centers, preference):
     preferred_info = list()
     for center in centers:
         df = pd.DataFrame(center.get('sessions'))
-        df.drop(['session_id', 'slots'], axis=1, inplace=True)
-        dates = [(datetime.date.today() + datetime.timedelta(i+1)).strftime(DATE_FORMAT) for i in range(preference.get('date-range'))]
-
-        age_query = 'min_age_limit <= {}'.format(preference.get('age'))
-        vaccine_qeury = 'vaccine == {}'.format(preference.get('vaccine')) if \
-            not preference.get('vaccine') == 'ALL' else '' 
-        date_query = 'date in {}'.format(str(dates))
-        preferred_info.append(
-            df.query(' and '.join([age_query, vaccine_qeury, date_query]))
+        df.drop(['session_id', 'slots', 'available_capacity'], axis=1, inplace=True)
+        df.rename(
+            columns={
+                'available_capacity_dose1': 'dose-I',
+                'available_capacity_dose2': 'dose-II',
+            }
         )
+
+        query = build_query(preference)
+        query_response = df.query(query)
+
+        if not query_response.empty:
+            query_response.drop(['min_age_limit'], axis=1, inplace=True)
+            preferred_info.append(
+                {', '.join([center['name'], center['address']]): query_response}
+            )
+            
     return preferred_info
 
 def print_formatted_info(pref_info):
-    pass
+    for key, value in pref_info.iteritems():
+        click.secho(key)
+        click.secho(
+            value.to_string(), fg='blue'
+        )
         
 
 def ping(preference):
     # try and raise for status
-    # add vaccine preference
     try:
         while True:
             resp = requests.get(
             URL.format(
                 district_id=preference['district'],
-                date = preference['start'].strftime(DATE_FORMAT)
+                date = datetime.datetime.today().strftime(DATE_FORMAT)
                 ), 
                 headers=headers
             )
@@ -69,7 +94,7 @@ def ping(preference):
 
 def update_district(district):
     ''' update district if not provided in args '''
-    if type(district) == bool:  
+    if district in ('True', 'False'):
         district_map = json.load(open('assets/district_codes.json'))
         which_state = inquirer.prompt([
             inquirer.List(
