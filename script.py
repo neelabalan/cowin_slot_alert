@@ -22,11 +22,15 @@ headers = {
 
 def build_query(age, vaccine, date_range, dose):
     age_query = 'min_age_limit <= {}'.format(age)
-    vaccine_qeury = 'vaccine == {}'.format(vaccine) if \
+    vaccine_qeury = 'vaccine == "{}"'.format(vaccine) if \
         not vaccine == 'ALL' else None
     date_query = 'date in {}'.format(str(get_date_range(date_range)))
+
+    dose_query = ''
     if dose:
-        dose_query = 'does-I > 0' if dose==1 else 'dose-II > 0' 
+        dose_query = 'dose_I > 0' if dose==1 else 'dose_II > 0' 
+    else:
+        dose_query = 'available_capacity > 0'
 
     return ' and '.join(
         filter(None, [age_query, vaccine_qeury, date_query, dose_query])
@@ -52,9 +56,9 @@ def get_preferred_info(centers, preference):
         df = pd.DataFrame(center.get('sessions'))
         df.rename(
             columns={
-                'available_capacity_dose1': 'dose-I',
-                'available_capacity_dose2': 'dose-II',
-            }
+                'available_capacity_dose1': 'dose_I',
+                'available_capacity_dose2': 'dose_II',
+            }, inplace=True
         )
 
         query = build_query(age, vaccine, date_range, dose)
@@ -62,11 +66,11 @@ def get_preferred_info(centers, preference):
 
         if not query_response.empty:
             drop_list = ['min_age_limit', 'session_id', 'slots', 'available_capacity']
-            if not dose:
-                drop_list.append('dose-I') if dose==1 else drop_list.append('dose-II')
+            if dose:
+                drop_list.append('dose_II') if dose==1 else drop_list.append('dose_I')
             
 
-            filtered_query_response = query_response.drop(drop_list, axix=1)
+            filtered_query_response = query_response.drop(drop_list, axis=1)
             preferred_info.append(
                 {', '.join([center['name'], center['address']]): filtered_query_response}
             )
@@ -74,13 +78,15 @@ def get_preferred_info(centers, preference):
     return preferred_info
 
 def print_formatted_info(pref_info):
-    for key, value in pref_info.iteritems():
+    if pref_info:
         playsound.playsound('assets/sample2.mp3')
-        click.secho(key)
-        click.secho(
-            value.to_string(), fg='blue'
-        )
-        
+        for info in pref_info:
+            for center, slots in info.items():
+                click.secho(center)
+                click.secho(
+                    slots.to_string(), fg='blue'
+                )
+                print('\n\n')
 
 def ping(preference):
     # try and raise for status
@@ -170,13 +176,14 @@ def update_district(district):
     default      = 'ALL',
     show_default = True,
     prompt       = True,
-    help         = 'COVAXIN/COVISHIELD/SPUTNIK/ALL'
+    help         = 'Choose between COVAXIN/COVISHIELD/SPUTNIK. Default is ALL'
 )
 @click.option(
-    '--interval', 
+    '--dose', 
     type         = click.IntRange(0, 2),
     default      = 0,
     show_default = True,
+    prompt       = True,
     help         = 'Set 1 for Dose-I or 2 for Dose-II. Default is both'
 )
 @click.option("--district", is_flag=False,  flag_value=True, default=True, help='To find district code keep the argument empty')
