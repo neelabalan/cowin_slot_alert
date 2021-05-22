@@ -1,6 +1,8 @@
-# cowin_slot_alert
+# COWIN slot alert
 ## Command line vaccine tracker 
-> get alert with `Napalm Death` or `Suspense` sound
+> get alerted with `Napalm Death` or `Suspense` sound when slot is available for your preference
+
+> Note: report issues [here](https://github.com/neelabalan/cowin_slot_alert/issues) if you find any. 
 
 ```
 Usage: script.py [OPTIONS]
