@@ -93,9 +93,10 @@ def get_preferred_info(centers, query):
             
     return preferred_info
 
-def print_formatted_info(pref_info):
+def print_formatted_info(pref_info, silent):
     if pref_info:
-        playsound.playsound('assets/sample2.mp3')
+        if not silent:
+            playsound.playsound('assets/sample2.mp3')
         for info in pref_info:
             for center, slots in info.items():
                 click.secho(center)
@@ -108,6 +109,7 @@ def ping(preference):
     # try and raise for status
     try:
         age, vaccine, date_range, dose = extract_preferences(preference)
+        silent = preference.get('silent')
         query = build_query(age, vaccine, date_range, dose)
 
         while True:
@@ -131,7 +133,7 @@ def ping(preference):
                     ),
                     fg='green'
                 )
-                print_formatted_info(pref_info)
+                print_formatted_info(pref_info, silent)
 
 
             time.sleep(preference['interval'])
@@ -213,7 +215,7 @@ def update_district(district):
     help         = 'Set 1 for Dose-I or 2 for Dose-II. Default is both'
 )
 @click.option("--district", is_flag=False,  flag_value=True, default=True, help='To find district code keep the argument empty')
-@click.option('--alert',    is_flag=True,   help='Sound alert if new slot is found')
+@click.option('--silent',   is_flag=True,   help='No alert')
 def run(**kwargs):
     kwargs.update({'district': update_district(kwargs.get('district'))})
     ping(kwargs) 
