@@ -20,13 +20,16 @@ headers = {
     'Origin'         : 'https://apisetu.gov.in',
 }
 
-def build_query(preference):
-    age_query = 'min_age_limit <= {}'.format(preference.get('age'))
-    vaccine_qeury = 'vaccine == {}'.format(preference.get('vaccine')) if \
-        not preference.get('vaccine') == 'ALL' else '' 
-    date_query = 'date in {}'.format(str(get_date_range(preference.get('date_range'))))
+def build_query(age, vaccine, date_range, dose):
+    age_query = 'min_age_limit <= {}'.format(age)
+    vaccine_qeury = 'vaccine == {}'.format(vaccine) if \
+        not vaccine == 'ALL' else None
+    date_query = 'date in {}'.format(str(get_date_range(date_range)))
+    if dose:
+        dose_query = 'does-I > 0' if dose==1 else 'dose-II > 0' 
+
     return ' and '.join(
-        filter(None, [age_query, vaccine_qeury, date_query])
+        filter(None, [age_query, vaccine_qeury, date_query, dose_query])
     )
 
 
@@ -34,11 +37,19 @@ def build_query(preference):
 def get_date_range(date_range):
     return [(datetime.date.today() + datetime.timedelta(i)).strftime(DATE_FORMAT) for i in range(date_range+1)]
 
+def extract_preferences(preference):
+    age        = preference.get('age')
+    vaccine    = preference.get('vaccine')
+    date_range = preference.get('date_range')
+    dose       = preference.get('dose')
+    return age, vaccine, date_range, dose
+
 def get_preferred_info(centers, preference):
     preferred_info = list()
+    age, vaccine, date_range, dose = extract_preferences(preference)
+
     for center in centers:
         df = pd.DataFrame(center.get('sessions'))
-        df.drop(['session_id', 'slots', 'available_capacity'], axis=1, inplace=True)
         df.rename(
             columns={
                 'available_capacity_dose1': 'dose-I',
@@ -46,19 +57,25 @@ def get_preferred_info(centers, preference):
             }
         )
 
-        query = build_query(preference)
+        query = build_query(age, vaccine, date_range, dose)
         query_response = df.query(query)
 
         if not query_response.empty:
-            query_response.drop(['min_age_limit'], axis=1, inplace=True)
+            drop_list = ['min_age_limit', 'session_id', 'slots', 'available_capacity']
+            if not dose:
+                drop_list.append('dose-I') if dose==1 else drop_list.append('dose-II')
+            
+
+            filtered_query_response = query_response.drop(drop_list, axix=1)
             preferred_info.append(
-                {', '.join([center['name'], center['address']]): query_response}
+                {', '.join([center['name'], center['address']]): filtered_query_response}
             )
             
     return preferred_info
 
 def print_formatted_info(pref_info):
     for key, value in pref_info.iteritems():
+        playsound.playsound('assets/sample2.mp3')
         click.secho(key)
         click.secho(
             value.to_string(), fg='blue'
@@ -138,7 +155,7 @@ def update_district(district):
     type         = int,
     default      = 120,
     show_default = True,
-    help         = 'Set the referesh interval'
+    help         = 'Set the referesh interval (seconds)'
 )
 @click.option(
     '--age',      
@@ -154,6 +171,13 @@ def update_district(district):
     show_default = True,
     prompt       = True,
     help         = 'COVAXIN/COVISHIELD/SPUTNIK/ALL'
+)
+@click.option(
+    '--interval', 
+    type         = click.IntRange(0, 2),
+    default      = 0,
+    show_default = True,
+    help         = 'Set 1 for Dose-I or 2 for Dose-II. Default is both'
 )
 @click.option("--district", is_flag=False,  flag_value=True, default=True, help='To find district code keep the argument empty')
 @click.option('--alert',    is_flag=True,   help='Sound alert if new slot is found')
