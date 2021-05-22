@@ -7,6 +7,7 @@ import click
 import sys
 import inquirer
 import requests
+import pandas as pd
 
 DATE_FORMAT = '%d-%m-%Y'
 URL = 'https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByDistrict?district_id={district_id}&date={date}'
@@ -18,26 +19,51 @@ headers = {
     'Origin'         : 'https://apisetu.gov.in',
 }
 
-def get_preferred_info(response, preference):
-    pass
+def get_preferred_info(centers, preference):
+    preferred_info = list()
+    for center in centers:
+        df = pd.DataFrame(center.get('sessions'))
+        df.drop(['session_id', 'slots'], axis=1, inplace=True)
+        dates = [(datetime.date.today() + datetime.timedelta(i+1)).strftime(DATE_FORMAT) for i in range(preference.get('date-range'))]
 
+        age_query = 'min_age_limit <= {}'.format(preference.get('age'))
+        vaccine_qeury = 'vaccine == {}'.format(preference.get('vaccine')) if \
+            not preference.get('vaccine') == 'ALL' else '' 
+        date_query = 'date in {}'.format(str(dates))
+        preferred_info.append(
+            df.query(' and '.join([age_query, vaccine_qeury, date_query]))
+        )
+    return preferred_info
+
+def print_formatted_info(pref_info):
+    pass
+        
 
 def ping(preference):
     # try and raise for status
     # add vaccine preference
-    resp = requests.get(
-       URL.format(
-           district_id=preference['district'],
-           date = preference['start'].strftime(DATE_FORMAT)
-        ), 
-        headers=headers
-    )
-    headers.update({
-        'If-None-Match': resp.headers['ETag']
-    })
+    try:
+        while True:
+            resp = requests.get(
+            URL.format(
+                district_id=preference['district'],
+                date = preference['start'].strftime(DATE_FORMAT)
+                ), 
+                headers=headers
+            )
+            headers.update({
+                'If-None-Match': resp.headers['ETag']
+            })
 
-    if resp.status_code == 200:
-        get_preferred_info(resp.json(), preference)
+            if resp.status_code == 200:
+                pref_info = get_preferred_info(resp.json().get('centers'), preference)
+                print_formatted_info(pref_info)
+
+
+            time.sleep(preference['interval'])
+
+    except (KeyboardInterrupt, SystemExit):
+        print('exiting')
  
 
 
@@ -76,18 +102,11 @@ def update_district(district):
 
 @click.command()
 @click.option(
-    '--start', 
-    type         = click.DateTime(formats=[DATE_FORMAT]),
-    default      = datetime.date.today().strftime(DATE_FORMAT),
+    '--date-range', 
+    type         = click.IntRange(0, 6),
+    default      = 0,
     show_default = True,
-    help         = 'Date format - DD-MM-YY'
-)
-@click.option(
-    '--end', 
-    type         = click.DateTime(formats=[DATE_FORMAT]),
-    default      = datetime.date.today().strftime(DATE_FORMAT),
-    show_default = True,
-    help         = 'Date format - DD-MM-YY'
+    help         = 'By default checks availability for today, set from 1-6 to show availability from today to today+n'
 )
 @click.option(
     '--interval', 
