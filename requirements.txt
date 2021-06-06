@@ -1,7 +1,7 @@
 blessed==1.17.6
 certifi==2020.12.5
 chardet==4.0.0
-click==8.0.1
+click==8.0.0
 idna==2.10
 inquirer==2.7.0
 numpy==1.20.3

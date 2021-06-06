@@ -2,15 +2,33 @@ import time
 import datetime 
 import requests
 import json
-import random
 import click
-import sys
 import inquirer
 import requests
 import pandas as pd
 import playsound
 import platform
 import os
+
+ascii_art = '''
+                  _       
+  ___ _____      _(_)_ __  
+ / __/ _ \ \ /\ / / | '_ \ 
+| (_| (_) \ V  V /| | | | |
+ \___\___/ \_/\_/ |_|_| |_|
+                           
+     _       _             
+ ___| | ___ | |_           
+/ __| |/ _ \| __|          
+\__ \ | (_) | |_           
+|___/_|\___/ \__|          
+                           
+       _           _       
+  __ _| | ___ _ __| |_     
+ / _` | |/ _ \ '__| __|    
+| (_| | |  __/ |  | |_     
+ \__,_|_|\___|_|   \__|    
+'''
 
 DATE_FORMAT = '%d-%m-%Y'
 URL = 'https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByDistrict?district_id={district_id}&date={date}'
@@ -27,6 +45,7 @@ def clear():
         os.system('cls') 
     else:
         os.system('clear')
+
 
 def build_query(age, vaccine, date_range, dose):
     age_query = 'min_age_limit <= {}'.format(age)
@@ -45,9 +64,9 @@ def build_query(age, vaccine, date_range, dose):
     )
 
 
-
 def get_date_range(date_range):
     return [(datetime.date.today() + datetime.timedelta(i)).strftime(DATE_FORMAT) for i in range(date_range+1)]
+
 
 def extract_preferences(preference):
     age        = preference.get('age')
@@ -55,6 +74,7 @@ def extract_preferences(preference):
     date_range = preference.get('date_range')
     dose       = preference.get('dose')
     return age, vaccine, date_range, dose
+
 
 def filter_query_response(response):
     if not response.empty:
@@ -93,6 +113,7 @@ def get_preferred_info(centers, query):
             
     return preferred_info
 
+
 def print_formatted_info(pref_info, silent):
     if pref_info:
         if not silent:
@@ -104,6 +125,7 @@ def print_formatted_info(pref_info, silent):
                     slots.to_string(index=False), fg='blue'
                 )
                 print('\n\n')
+
 
 def ping(preference):
     # try and raise for status
@@ -142,7 +164,6 @@ def ping(preference):
         print('\nexiting')
  
 
-
 def update_district(district):
     ''' update district if not provided in args '''
     if district in ('True', 'False'):
@@ -173,7 +194,6 @@ def update_district(district):
             fg='green'
         )
     return district
-
 
 
 @click.command()
@@ -218,8 +238,10 @@ def update_district(district):
 @click.option('--silent',   is_flag=True,   help='No alert')
 def run(**kwargs):
     kwargs.update({'district': update_district(kwargs.get('district'))})
-    ping(kwargs) 
-    # print(kwargs)
+    clear()
+    print(ascii_art)
+    time.sleep(5)
+    ping(kwargs)
 
 
 if __name__ == '__main__':
